@@ -1,20 +1,31 @@
 # main.py
-import asyncio
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from config import settings
+import httpx
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from handlers.sync_handler import router as sync_router
+from handlers.async_handler import router as async_router
+from handlers.fake_handler import router as fake_router
 from logger import logger
 
-app = FastAPI(title="Iron Stack — Concurrency Tester")
-
-@app.get("/fake")
-async def fake():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     try:
-        logger.info("Fake async sleep endpoint called")
-        await asyncio.sleep(2)
-        response_data = {"response": "fake"}
-        logger.debug(f"Fake sleep success: {response_data}")
-        return JSONResponse(content=response_data, status_code=200)
-    except Exception as e:
-        logger.error(f"Error in fake endpoint: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.info("Initializing persistent httpx.AsyncClient during startup")
+        app.state.client = httpx.AsyncClient(timeout=120.0)
+        yield
+    except Exception as startup_e:
+        logger.error(f"Lifespan startup failure: {startup_e}", exc_info=True)
+        raise startup_e
+    finally:
+        try:
+            logger.info("Closing persistent httpx.AsyncClient during shutdown")
+            await app.state.client.aclose()
+        except Exception as shutdown_e:
+            logger.error(f"Lifespan shutdown error: {shutdown_e}", exc_info=True)
+
+app = FastAPI(lifespan=lifespan, title="Iron Stack — Concurrency Tester")
+
+# Include modular routers
+app.include_router(sync_router)
+app.include_router(async_router)
+app.include_router(fake_router)
