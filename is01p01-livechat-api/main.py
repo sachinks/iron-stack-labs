@@ -1,6 +1,7 @@
 # main.py
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 from config import settings
 from logger import logger
@@ -8,6 +9,21 @@ from models import ChatRequest
 from streaming import stream_tokens
 
 app = FastAPI(title="Iron Stack — LiveChat API")
+
+# Mount static files folder
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+except Exception as e:
+    logger.error(f"Failed to mount static directory: {e}", exc_info=True)
+
+@app.get("/")
+async def home():
+    try:
+        logger.info("Serving home interface page")
+        return FileResponse("static/index.html")
+    except Exception as e:
+        logger.error(f"Error serving home interface page: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/health")
 async def health():
@@ -38,5 +54,6 @@ async def chat(request: ChatRequest):
     except Exception as e:
         logger.error(f"Error processing chat request: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 
