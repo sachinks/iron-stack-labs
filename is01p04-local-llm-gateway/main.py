@@ -2,6 +2,8 @@
 """Main application entry point for the Local LLM Gateway."""
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse
+
 from config import settings
 from logger import logger
 from gateway.llm_client import get_llm_client
@@ -23,28 +25,41 @@ async def health():
 
 @app.post("/chat")
 async def chat(request: Request, user: dict = Depends(get_current_user)):
-    """Mock chat completions route secured with JWT authentication."""
+    """Chat completions endpoint that streams model tokens via EventSourceResponse."""
     try:
-        logger.info(f"Secured chat completions endpoint called by user_id='{user.get('sub')}' (tier='{user.get('tier')}')")
+        logger.info(f"Chat completions called by user_id='{user.get('sub')}' (tier='{user.get('tier')}')")
         body = await request.json()
         prompt = body.get("prompt", "")
-        logger.debug(f"Received prompt from user: {prompt}")
+        if not prompt.strip():
+            logger.warning("Empty prompt received in chat completions")
+            raise HTTPException(status_code=422, detail="Prompt message cannot be empty")
+            
+        client = get_llm_client()
         
-        # Instantiate client to verify connectivity/configuration works
-        _ = get_llm_client()
-        
-        response_data = {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "content": f"Mock response to: {prompt}"
-                    }
-                }
-            ]
-        }
-        logger.debug("Mock chat response successfully created")
-        return JSONResponse(content=response_data, status_code=200)
+        async def token_stream():
+            try:
+                logger.info(f"Starting async token stream to Ollama for prompt: {prompt[:50]}...")
+                stream = await client.chat.completions.create(
+                    model=settings.llm_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    stream=True,
+                )
+                async for chunk in stream:
+                    # Capture token chunk content safely
+                    tok = chunk.choices[0].delta.content
+                    if tok:
+                        logger.debug(f"Yielding token: {repr(tok)}")
+                        yield tok
+                # SSE final token signal
+                logger.info("Token stream successfully completed. Yielding [DONE]")
+                yield "[DONE]"
+            except Exception as stream_e:
+                logger.error(f"Error encountered inside token generator stream: {stream_e}", exc_info=True)
+                yield f"[ERROR] {stream_e}"
+                
+        return EventSourceResponse(token_stream())
+    except HTTPException as http_e:
+        raise http_e
     except Exception as e:
-        logger.error(f"Error in chat completions: {e}", exc_info=True)
+        logger.error(f"Error preparing chat completions stream: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
