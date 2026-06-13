@@ -1,9 +1,11 @@
 # main.py
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse
 from config import settings
 from logger import logger
 from models import ChatRequest
+from streaming import stream_tokens
 
 app = FastAPI(title="Iron Stack — LiveChat API")
 
@@ -29,12 +31,12 @@ async def chat(request: ChatRequest):
             logger.warning("Rejecting chat request: message consists only of whitespace")
             raise HTTPException(status_code=422, detail="Message cannot be empty or only whitespace")
             
-        response_data = {"prompt": request.message}
-        logger.info("Chat request successfully mock-processed")
-        return JSONResponse(content=response_data, status_code=200)
+        logger.info("Chat request validated, initiating SSE stream response")
+        return EventSourceResponse(stream_tokens(request.message))
     except HTTPException as he:
         raise he
     except Exception as e:
         logger.error(f"Error processing chat request: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
