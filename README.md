@@ -1,74 +1,94 @@
-# iron-stack-labs — Systems Engineering Revision Lab
+# Iron Stack Labs
 
-> *"The engineer who ships, measures, and fixes beats the engineer who only reads. Build the thing. Write the BENEATH answer. Push it to GitHub."*
+> *"The engineer who ships, measures, and fixes beats the engineer who only reads."*
 
-This repository consolidates the Layer 1 systems engineering projects of the Iron Stack curriculum. It is structured as a progressive multi-project workspace, containing step-by-step incremental branches demonstrating architectural evolution, system scaling, and security auditing.
-
----
-
-## 1. Project Directory Index
-
-Each folder represents an independent project within the systems stack, configured with its own virtual environment at `~/venvs/islab/<project>` and local logging directories.
-
-| Project | System Architecture | Core Technologies | Location |
-| :--- | :--- | :--- | :--- |
-| **IS01P01** | **LiveChat Support API** | FastAPI + OpenAI Streaming + HTML SSE Client | [`is01p01-livechat-api/`](file:///home/sk/cowork/projects/iron-stack-labs/is01p01-livechat-api) |
-| **IS01P02** | **Concurrency Tester** | FastAPI + Sync/Async HTTP Offloading + Matplotlib Benchmarks | [`is01p02-concurrency-tester/`](file:///home/sk/cowork/projects/iron-stack-labs/is01p02-concurrency-tester) |
-| **IS01P03** | **Multitenant API** | FastAPI + LIFO Middleware Stack + Redis Rate Limiter + JWT | [`is01p03-multitenant-api/`](file:///home/sk/cowork/projects/iron-stack-labs/is01p03-multitenant-api) |
-| **IS01P04** | **Local LLM Gateway** | FastAPI + Swappable OpenAI Client + Decentralized JWT Auth | [`is01p04-local-llm-gateway/`](file:///home/sk/cowork/projects/iron-stack-labs/is01p04-local-llm-gateway) |
+A progressive systems engineering project workspace demonstrating the incremental design and implementation of real-world backend systems using Python and FastAPI. Each project is built step by step, with every checkpoint committed to its own Git branch and tagged for easy reference.
 
 ---
 
-## 2. Progressive Branch Strategy
+## Projects
 
-To demonstrate incremental software development, each project step is committed on a progressive chain of Git branches. Hitting each Git tag compiles and runs that specific system iteration:
+| Project | System | Core Technologies |
+| :--- | :--- | :--- |
+| **IS01P01** | [LiveChat Support API](./is01p01-livechat-api/) | FastAPI · OpenAI Streaming · Server-Sent Events |
+| **IS01P02** | [Concurrency Tester](./is01p02-concurrency-tester/) | FastAPI · Sync/Async Benchmarking · Matplotlib |
+| **IS01P03** | [Multitenant API](./is01p03-multitenant-api/) | FastAPI · JWT Auth · Redis Rate Limiting · LIFO Middleware |
+| **IS01P04** | [Local LLM Gateway](./is01p04-local-llm-gateway/) | FastAPI · Swappable LLM Client · Stateless JWT · Streaming |
 
-```mermaid
-graph TD
-    main --> l1-is01p01-step-1
-    l1-is01p01-step-1 --> l1-is01p01-step-2
-    l1-is01p01-step-2 --> l1-is01p01-step-3
-    l1-is01p01-step-3 --> l1-is01p01-step-4
-    l1-is01p01-step-4 --> l1-is01p01-step-5
-    l1-is01p01-step-5 --> l1-is01p02-step-1
-    l1-is01p02-step-1 --> l1-is01p02-step-2
-    l1-is01p02-step-2 --> l1-is01p02-step-3
-    l1-is01p02-step-3 --> l1-is01p02-step-4
-    l1-is01p02-step-4 --> l1-is01p02-step-5
-    l1-is01p02-step-5 --> l1-is01p03-step-1
-    l1-is01p03-step-1 --> l1-is01p03-step-2
-    l1-is01p03-step-2 --> l1-is01p03-step-3
-    l1-is01p03-step-3 --> l1-is01p03-step-4
-    l1-is01p03-step-4 --> l1-is01p03-step-5
-    l1-is01p03-step-5 --> l1-is01p03-step-6
-    l1-is01p03-step-6 --> l1-is01p04-step-1
-    l1-is01p04-step-1 --> l1-is01p04-step-2
-    l1-is01p04-step-2 --> l1-is01p04-step-3
-    l1-is01p04-step-3 --> l1-is01p04-step-4
-    l1-is01p04-step-4 --> l1-is01p04-step-5
+---
+
+## Branch Structure
+
+Each project is built incrementally. Every step in the build has its own dedicated branch and Git tag, allowing you to checkout any specific stage of the implementation.
+
+```
+main  (latest complete state)
+ │
+ ├── IS01P01: LiveChat Support API
+ │    ├── l1-is01p01-step-1   (v1.1.0-step1)  Baseline scaffold & logging
+ │    ├── l1-is01p01-step-2   (v1.1.0-step2)  Request model & validation
+ │    ├── l1-is01p01-step-3   (v1.1.0-step3)  Async OpenAI token streaming
+ │    ├── l1-is01p01-step-4   (v1.1.0-step4)  Static HTML SSE client UI
+ │    └── l1-is01p01-step-5   (v1.1.0-final)  README & final polish
+ │
+ ├── IS01P02: Concurrency Tester
+ │    ├── l1-is01p02-step-1   (v1.2.0-step1)  Baseline & fake async route
+ │    ├── l1-is01p02-step-2   (v1.2.0-step2)  Sync vs async sleep demo
+ │    ├── l1-is01p02-step-3   (v1.2.0-step3)  Modular routing & lifespan
+ │    ├── l1-is01p02-step-4   (v1.2.0-step4)  Benchmark harness & plotting
+ │    └── l1-is01p02-step-5   (v1.2.0-final)  README & final polish
+ │
+ ├── IS01P03: Multitenant API
+ │    ├── l1-is01p03-step-1   (v1.3.0-step1)  Scaffold & health check
+ │    ├── l1-is01p03-step-2   (v1.3.0-step2)  Models & Redis client
+ │    ├── l1-is01p03-step-3   (v1.3.0-step3)  JWT utils & auth router
+ │    ├── l1-is01p03-step-4   (v1.3.0-step4)  Auth, rate limit & logging middleware
+ │    ├── l1-is01p03-step-5   (v1.3.0-step5)  LIFO middleware stack & endpoints
+ │    └── l1-is01p03-step-6   (v1.3.0-final)  README & final polish
+ │
+ └── IS01P04: Local LLM Gateway
+      ├── l1-is01p04-step-1   (v1.4.0-step1)  Baseline config & health route
+      ├── l1-is01p04-step-2   (v1.4.0-step2)  LLM client adapter & mock endpoint
+      ├── l1-is01p04-step-3   (v1.4.0-step3)  Stateless JWT auth package
+      ├── l1-is01p04-step-4   (v1.4.0-step4)  Streaming completions via SSE
+      └── l1-is01p04-step-5   (v1.4.0-final)  README & final polish
 ```
 
-### Git Tag Naming Rules:
-* **IS01P01 Tags:** `v1.1.0-step1` to `v1.1.0-final`
-* **IS01P02 Tags:** `v1.2.0-step1` to `v1.2.0-final`
-* **IS01P03 Tags:** `v1.3.0-step1` to `v1.3.0-final`
-* **IS01P04 Tags:** `v1.4.0-step1` to `v1.4.0-final`
+### Checking Out a Specific Step
+
+```bash
+# By branch
+git checkout l1-is01p03-step-4
+
+# By tag
+git checkout v1.3.0-step4
+```
 
 ---
 
-## 3. Global Systems Constraints
+## Getting Started
 
-All projects in this workspace strictly adhere to three core operational guidelines:
+Each project has its own `README.md`, `requirements.txt`, and `.env.example`. Navigate into the project directory and follow its setup instructions.
 
-1. **Robust Exception Safety (Try-Except Everywhere):** Every function is wrapped in structured exception safety blocks, capturing trace contexts and formatting them into system-friendly errors or HTTP exceptions.
-2. **Rotating Level-Based Logging:** Each project implements a customized, size-capped `RotatingFileHandler` writing telemetry to local `logs/app.log` (gitignored), paired with a standard terminal stdout StreamHandler.
-3. **Isolated Environments:** Virtual environments are created outside of the workspace directory at `~/venvs/islab/<project-name>` to prevent repository pollution.
+```bash
+# Example: IS01P01
+cd is01p01-livechat-api
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn main:app --reload
+```
 
 ---
 
-## 4. Academic Integrity & Private Logs
+## Design Principles
 
-Theoretical notes, answers to system engineering questions (e.g. the BENEATH answers on kernel wait-states, Nginx buffering, PagedAttention block blocks, and ASGI signatures), and sequence maps are kept privately inside the companion repository: [IronStack_EdTEch/IRON_JOURNAL.md](file:///home/sk/cowork/projects/IronStack_EdTEch/IRON_JOURNAL.md).
+All projects share three core engineering standards:
+
+1. **Structured Exception Safety** — every endpoint and service boundary is wrapped in try/except blocks, capturing trace context and surfacing clean HTTP errors.
+2. **Rotating Level-Based Logging** — each project ships a size-capped `RotatingFileHandler` writing to `logs/app.log`, alongside a stdout `StreamHandler` for container-friendly output.
+3. **Twelve-Factor Configuration** — all runtime secrets and environment-specific settings are loaded from `.env` via `pydantic-settings`, keeping configuration cleanly separate from code.
 
 ---
 
