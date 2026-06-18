@@ -2,10 +2,13 @@
 
 from .math_utils import dot_product, l2_norm, cosine_similarity
 from .store import VectorStore
+from .main import EmbeddingExplorer
 
 __all__ = [
     "dot_product",
     "l2_norm",
     "cosine_similarity",
     "VectorStore",
+    "EmbeddingExplorer",
 ]
+
