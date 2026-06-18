@@ -28,12 +28,20 @@ class EmbeddingExplorer:
             embeddings = self.model.encode(texts)
             return [emb.tolist() for emb in embeddings]
 
-    def add(self, text: str) -> None:
-        """Generate embedding for text and add to the vector store."""
+    def add(self, text: str) -> list[float]:
+        """Generate embedding for text and add to the vector store.
+
+        Args:
+            text: The text string to embed and store.
+
+        Returns:
+            The generated embedding vector as a list of floats.
+        """
         embedding = self.encode(text)
         # Ensure it is a list of floats, not list of lists
         assert isinstance(embedding, list) and isinstance(embedding[0], float)
         self.store.add(text, embedding)
+        return embedding
 
     def search(self, query: str, top_k: int = 5) -> list[dict]:
         """Encode query string and search the store."""
