@@ -1,10 +1,14 @@
-"""bench/embed.py — embedding utilities (Step 2).
+"""bench/embed.py — embedding and MRL truncation utilities.
 
-Provides:
+Provides two public functions used throughout the benchmark:
+
   embed(text, kind)    -> 768-d unit-length float32 ndarray
+  truncate(vec, dim)   -> dim-d unit-length float32 ndarray
 
 Both functions enforce L2 normalisation so downstream code can use plain
-dot products for cosine similarity.
+dot products for cosine similarity.  The self-test (``python -m bench.embed``)
+runs 25 hard assertions across 5 texts and 5 dims to confirm correctness
+before any benchmark runs.
 """
 
 import numpy as np
@@ -82,37 +86,61 @@ def embed(text: str, kind: str = "document") -> np.ndarray:
     return _l2_normalize(vec)
 
 
+def truncate(vec: np.ndarray, dim: int) -> np.ndarray:
+    """Truncate *vec* to *dim* dimensions and re-normalise — the MRL move.
+
+    Slicing a unit vector to its first *dim* components shortens it: the
+    slice no longer lies on the unit sphere.  Re-normalising after slicing
+    is **mandatory** before any cosine comparison; without it, truncated
+    vectors of different dims are on different-radius spheres and their dot
+    products are silently wrong.
+
+    This is the single most common MRL implementation bug.  The self-test
+    asserts every truncated vector has norm == 1.0 to catch regressions.
+
+    Args:
+        vec: a unit-length 1-D float32 numpy array.  Expected to have been
+            produced by ``embed()`` or already normalised.
+        dim: number of leading dimensions to keep.  Must be <= ``vec.shape[0]``.
+
+    Returns:
+        A float32 numpy array of shape ``(dim,)`` with L2 norm == 1.0.
+
+    Raises:
+        ValueError: if *dim* exceeds the vector's size.
+    """
+    if dim > vec.shape[0]:
+        raise ValueError(f"dim {dim} exceeds vector size {vec.shape[0]}")
+    return _l2_normalize(vec[:dim])
+
+
 if __name__ == "__main__":
-    print("Running inline tests for Step 2 math and structures...")
-    
-    # 1. Normalization sanity check
-    v_test = np.array([3.0, 4.0], dtype=np.float32)
-    v_norm = _l2_normalize(v_test)
-    expected_norm = 1.0
-    actual_norm = np.linalg.norm(v_norm)
-    assert abs(actual_norm - expected_norm) < 1e-6, f"Math fail: norm is {actual_norm}"
-    print("  [OK] L2 normalization logic matches unit-length expectations.")
+    DIMS = [64, 128, 256, 512, 768]
+    TEST_TEXTS = [
+        ("The quick brown fox jumps over the lazy dog", "document"),
+        ("Matryoshka embeddings store meaning in nested prefixes", "document"),
+        ("How do I reduce memory usage in a vector database?", "query"),
+        ("A REST API exposes resources over HTTP using GET and POST", "document"),
+        ("what is the best truncation dimension for retrieval?", "query"),
+    ]
+    NORM_TOL = 1e-5
 
-    # 2. Zero vector boundary check
-    v_zero = np.zeros(10, dtype=np.float32)
-    v_zero_norm = _l2_normalize(v_zero)
-    assert np.all(v_zero_norm == 0.0), "Math fail: zero vector norm mutation occurred"
-    print("  [OK] Zero-vector division guard behaves correctly.")
+    print(f"Self-test: {len(TEST_TEXTS)} texts x {len(DIMS)} dims = "
+          f"{len(TEST_TEXTS) * len(DIMS)} norm checks\n")
 
-    # 3. Connection and embedding generation check
-    print("\nAttempting connection to Ollama server...")
-    try:
-        sample_text = "Matryoshka representation learning"
-        v = embed(sample_text, kind="document")
-        v_norm_check = np.linalg.norm(v)
-        print(f"  [OK] Successfully connected to Ollama!")
-        print(f"  [OK] Generated vector shape: {v.shape}")
-        print(f"  [OK] Generated vector L2 norm: {v_norm_check:.6f}")
-        assert abs(v_norm_check - 1.0) < 1e-5, f"Ollama embedding normalisation check failed: norm={v_norm_check}"
-    except requests.exceptions.ConnectionError:
-        print("  [WARNING] Ollama server is not running or unreachable. Skipping integration check.")
-        print("  (Make sure Ollama is running locally if you want to test retrieval embeddings.)")
-    except Exception as e:
-        print(f"  [WARNING] Could not verify Ollama embeddings: {e}")
-    
-    print("\nInline verification checks complete.")
+    for text, kind in TEST_TEXTS:
+        v = embed(text, kind=kind)
+        full_norm = np.linalg.norm(v)
+        assert abs(full_norm - 1.0) < NORM_TOL, (
+            f"FAIL full-dim norm={full_norm:.6f} for: {text!r}"
+        )
+        for d in DIMS:
+            t = truncate(v, d)
+            t_norm = np.linalg.norm(t)
+            assert abs(t_norm - 1.0) < NORM_TOL, (
+                f"FAIL dim={d} norm={t_norm:.6f} for: {text!r}"
+            )
+        print(f"  OK  [{kind:8s}] {text[:55]!r}  full={full_norm:.6f}  "
+              + "  ".join(f"dim{d}={np.linalg.norm(truncate(v, d)):.6f}" for d in DIMS))
+
+    print("\nAll norm checks passed. Truncation is sound.")
