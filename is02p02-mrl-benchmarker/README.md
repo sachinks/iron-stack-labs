@@ -1,16 +1,17 @@
-# IS02P02 — MRL Benchmarker (Step 3: Slicing & Re-normalization)
+# IS02P02 — MRL Benchmarker (Step 4: Corpus & Query Definition)
 
 > *"Most embedding models give you one fixed-size vector — use all 768 dimensions or none. Matryoshka Representation Learning changes the deal: the first k dimensions of an MRL embedding are themselves a valid, high-quality embedding. Train once. Truncate anywhere. Benchmark to find the smallest dimension that still meets your recall target."*
 
 ---
 
-## What this project builds (Step 3)
+## What this project builds (Step 4)
 
-In this third step, we implement vector truncation and verification logic:
+In this fourth step, we introduce our evaluation corpus and query dataset:
 1. **Declarative Settings (`config.py`)** — Loads configuration schemas (Ollama URL, model name) from host environment or `.env` files.
 2. **Task Prefixes (`bench/embed.py`)** — Prepend model instruction labels (`search_document:` / `search_query:`) to align with target dual-encoder pathways.
 3. **L2 Normalization & API Client (`bench/embed.py`)** — Requests dense embeddings from Ollama and scales output vectors to unit length ($L_2$ norm = $1.0$).
 4. **MRL Truncation & Re-normalization (`bench/embed.py`)** — Truncates vectors to lower target dimensions and scales the truncated slice back to unit length ($L_2$ norm = $1.0$) to preserve cosine similarity calculations.
+5. **Corpus & Query Definition (`bench/corpus.py`)** — Defines a balanced testing dataset of 35 documents across 6 distinct topics, 9 evaluation search queries, and a dictionary of known-relevant document mappings used to sanity-check the full-dimensional embeddings baseline.
 
 ---
 
@@ -37,6 +38,10 @@ $$\mathbf{v}_{\text{truncated\_and\_normalized}} = \frac{\mathbf{v}_{\text{slice
 
 This is the single most critical implementation step in MRL systems. Skipping re-normalization degrades retrieval accuracy.
 
+### 5. Balanced Evaluation Corpus and Sanity Checks
+* **Class Balance:** To ensure that retrieval metrics are unbiased, our test dataset represents multiple categories with equal distribution (6 documents per topic across programming, finance, cooking, animals, sports, and health).
+* **Baseline Sanity Validation:** Before performing dimension benchmarking, a `SANITY` map is utilized to test high-intent query matches against known relevant document targets in the full-dimensional space. If our system fails to return these targets at Rank 1, it implies that the indexing or prefix configuration is corrupted.
+
 ---
 
 ## How to install & run
@@ -59,17 +64,17 @@ Verify that truncation and re-normalization works correctly across multiple test
 python -m bench.embed
 ```
 
+### 4. Verify Corpus Statistics
+Verify the evaluation corpus and query dataset structure:
+```bash
+python -m bench.corpus
+```
+
 Expected terminal output:
 ```text
-Self-test: 5 texts x 5 dims = 25 norm checks
-
-  OK  [document] 'The quick brown fox jumps over the lazy dog'  full=1.000000  dim64=1.000000  dim128=1.000000  dim256=1.000000  dim512=1.000000  dim768=1.000000
-  OK  [document] 'Matryoshka embeddings store meaning in nested prefixes'  full=1.000000  dim64=1.000000  dim128=1.000000  dim256=1.000000  dim512=1.000000  dim768=1.000000
-  OK  [query]    'How do I reduce memory usage in a vector database?'  full=1.000000  dim64=1.000000  dim128=1.000000  dim256=1.000000  dim512=1.000000  dim768=1.000000
-  OK  [document] 'A REST API exposes resources over HTTP using GET and P'  full=1.000000  dim64=1.000000  dim128=1.000000  dim256=1.000000  dim512=1.000000  dim768=1.000000
-  OK  [query]    'what is the best truncation dimension for retrieval?'  full=1.000000  dim64=1.000000  dim128=1.000000  dim256=1.000000  dim512=1.000000  dim768=1.000000
-
-All norm checks passed. Truncation is sound.
+35 docs across 6 topics: programming=6, finance=6, cooking=6, animals=6, sports=6, health=5
+9 queries
+4 sanity-labeled queries
 ```
 
 ---
@@ -80,6 +85,7 @@ All norm checks passed. Truncation is sound.
 is02p02-mrl-benchmarker/
   bench/
     __init__.py    Marks bench/ as a package directory
+    corpus.py      Evaluation corpus, queries, and sanity-check mappings
     embed.py       L2 normalization, embedding, truncation, and self-test suite
   config.py        Central settings loader singleton
 ```
@@ -103,12 +109,20 @@ is02p02-mrl-benchmarker/
 - **Process**: Slices the vector coords: `vec[:dim]`. Normalizes the sliced coordinates using `_l2_normalize`.
 - **Output**: A float32 numpy array of shape `(dim,)` ($L_2$ norm = $1.0$).
 
+### 4. `bench/corpus.py` (Script execution)
+- **Input**: None (module loading).
+- **Process**: Parses the balanced `CORPUS` array and groups categories to compile count statistics.
+- **Output**: Console print details of loaded documents, query samples, and sanity mapping check pairs.
+
 ---
 
 ## Observed
 
 ### Truncation Slicing Norms
 By executing `python -m bench.embed`, we assert that every sliced embedding is placed back onto the unit sphere surface. Out of 25 distinct combinations of documents, queries, and dimension bounds (64, 128, 256, 512, 768), all L2 norms evaluate to exactly `1.000000` (within a tolerance threshold of `1e-5`).
+
+### Corpus Integrity
+Running `python -m bench.corpus` demonstrates a balanced class distribution across the evaluation database, preventing single-category dominance from biasing downstream Recall@K metrics.
 
 ---
 
