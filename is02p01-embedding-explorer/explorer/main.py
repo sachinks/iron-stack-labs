@@ -6,6 +6,7 @@ text encoding via sentence-transformers and inserts them into our VectorStore.
 
 from sentence_transformers import SentenceTransformer
 from .store import VectorStore
+from .visualise import visualise
 
 
 class EmbeddingExplorer:
@@ -41,37 +42,67 @@ class EmbeddingExplorer:
         return self.store.search(query_embedding, top_k=top_k)
 
 
+CORPUS = [
+    # Programming
+    ("Python is a high-level programming language.", "programming"),
+    ("I love writing code and building software.", "programming"),
+    ("Async functions in Python return coroutines.", "programming"),
+    ("Debugging is the art of removing software bugs.", "programming"),
+    ("Git tracks changes across versions of source code.", "programming"),
+    # Animals (incl. the python-snake polysemy collision)
+    ("A python is a large snake that squeezes its prey.", "animals"),
+    ("Cats are wonderful pets that sleep all day.", "animals"),
+    ("Dogs are loyal companions and love to play fetch.", "animals"),
+    ("Eagles soar high above the mountains hunting prey.", "animals"),
+    # Cooking
+    ("Searing meat creates a rich brown crust.", "cooking"),
+    ("Sous vide cooks food slowly in a warm water bath.", "cooking"),
+    ("Fresh basil and garlic make a fragrant pesto.", "cooking"),
+    ("Knead the dough until it becomes smooth and elastic.", "cooking"),
+    # Finance
+    ("The stock market crashed sharply today.", "finance"),
+    ("Interest rates affect the cost of borrowing money.", "finance"),
+    ("Investors diversify portfolios to reduce risk.", "finance"),
+    ("Inflation erodes the purchasing power of savings.", "finance"),
+    # Sports
+    ("The cricket team won the match in the final over.", "sports"),
+    ("She scored a stunning goal in the last minute.", "sports"),
+    ("Marathon runners train for months before the race.", "sports"),
+    # Weather / nature
+    ("Heavy monsoon rains flooded the coastal city.", "weather"),
+    ("A gentle breeze cooled the warm summer evening.", "weather"),
+    ("Thunderstorms are common during the afternoon heat.", "weather"),
+    ("Snow blanketed the quiet village overnight.", "weather"),
+]
+
+
 if __name__ == "__main__":
     print("=== Testing EmbeddingExplorer ===")
     
     explorer = EmbeddingExplorer()
     
-    # Seeding with a simple 6-sentence corpus across 3 distinct topics
-    corpus = [
-        "The quick brown fox jumps over the lazy dog.",
-        "A fast canine leaps across a sleepy pup.",          # Topic A: Animals leaping
-        "Information flow architecture defines how data moves.",
-        "Data pipelines route records between services.",   # Topic B: Software architecture
-        "Quantum computing relies on qubits and superposition.",
-        "Superconducting circuits enable quantum processors." # Topic C: Quantum computers
-    ]
+    texts = [t for t, _ in CORPUS]
+    groups = [g for _, g in CORPUS]
     
     print("Encoding and adding corpus...")
-    for text in corpus:
+    for text in texts:
         explorer.add(text)
         
     print(f"Store loaded with {len(explorer.store)} items.")
     
     # Query Topic A
-    query_a = "Canines leaping over dogs"
+    query_a = "I enjoy programming in python"
     print(f"\nQuerying: '{query_a}'")
-    for r in explorer.search(query_a, top_k=2):
+    for r in explorer.search(query_a, top_k=3):
         print(f"  Rank {r['rank']}: Score {r['score']:.4f} -> {r['text']}")
         
     # Query Topic B
-    query_b = "System data routing pipelines"
+    query_b = "dangerous pythons and snakes"
     print(f"\nQuerying: '{query_b}'")
-    for r in explorer.search(query_b, top_k=2):
+    for r in explorer.search(query_b, top_k=3):
         print(f"  Rank {r['rank']}: Score {r['score']:.4f} -> {r['text']}")
         
+    print("\nGenerating UMAP visualization...")
+    visualise(explorer.store, output_path="embedding_space.png", groups=groups)
+    
     print("=== Checks complete ===")
