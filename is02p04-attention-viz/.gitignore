@@ -1,0 +1,3 @@
+# Ignore generated BertViz attention visualization HTML pages
+head_view.html
+model_view.html
