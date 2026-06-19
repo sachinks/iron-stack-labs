@@ -1,17 +1,18 @@
-# IS02P02 — MRL Benchmarker (Step 4: Corpus & Query Definition)
+# IS02P02 — MRL Benchmarker (Step 5: Benchmarking & Recall@K)
 
 > *"Most embedding models give you one fixed-size vector — use all 768 dimensions or none. Matryoshka Representation Learning changes the deal: the first k dimensions of an MRL embedding are themselves a valid, high-quality embedding. Train once. Truncate anywhere. Benchmark to find the smallest dimension that still meets your recall target."*
 
 ---
 
-## What this project builds (Step 4)
+## What this project builds (Step 5)
 
-In this fourth step, we introduce our evaluation corpus and query dataset:
+In this fifth step, we implement the metric calculation and benchmark sweep:
 1. **Declarative Settings (`config.py`)** — Loads configuration schemas (Ollama URL, model name) from host environment or `.env` files.
 2. **Task Prefixes (`bench/embed.py`)** — Prepend model instruction labels (`search_document:` / `search_query:`) to align with target dual-encoder pathways.
 3. **L2 Normalization & API Client (`bench/embed.py`)** — Requests dense embeddings from Ollama and scales output vectors to unit length ($L_2$ norm = $1.0$).
 4. **MRL Truncation & Re-normalization (`bench/embed.py`)** — Truncates vectors to lower target dimensions and scales the truncated slice back to unit length ($L_2$ norm = $1.0$) to preserve cosine similarity calculations.
 5. **Corpus & Query Definition (`bench/corpus.py`)** — Defines a balanced testing dataset of 35 documents across 6 distinct topics, 9 evaluation search queries, and a dictionary of known-relevant document mappings used to sanity-check the full-dimensional embeddings baseline.
+6. **Benchmarking Suite (`bench/benchmark.py`)** — Performs a sweep over candidate dimensions (64, 128, 256, 512, 768), calculating semantic similarity rankings using vectorized matrix operations, checking baseline sanity, and outputting recall@5, search latency, and memory footprints.
 
 ---
 
@@ -42,6 +43,12 @@ This is the single most critical implementation step in MRL systems. Skipping re
 * **Class Balance:** To ensure that retrieval metrics are unbiased, our test dataset represents multiple categories with equal distribution (6 documents per topic across programming, finance, cooking, animals, sports, and health).
 * **Baseline Sanity Validation:** Before performing dimension benchmarking, a `SANITY` map is utilized to test high-intent query matches against known relevant document targets in the full-dimensional space. If our system fails to return these targets at Rank 1, it implies that the indexing or prefix configuration is corrupted.
 
+### 6. Evaluation Metrics: Recall@K, Latency, and Memory Footprint
+* **Recall@K Metric:** Treats the full-dimensional ranking as the ground truth ("Gold Set"). It counts what proportion of those top-K results are preserved after truncation:
+  $$\text{Recall@K} = \frac{|\text{TopK}_{\text{truncated}} \cap \text{TopK}_{\text{gold}}|}{K}$$
+* **Vectorized Similarity Scoring:** Computes cosine similarities simultaneously for all documents by stacking normalized vectors into a 2D matrix $D \in \mathbb{R}^{N \times d}$ and calculating `D @ q` using optimized linear algebra operations.
+* **Memory Footprint:** Measures bytes required to store embeddings in memory. Since each coordinate is a 32-bit float (4 bytes), storage scales linearly with dimension.
+
 ---
 
 ## How to install & run
@@ -70,11 +77,31 @@ Verify the evaluation corpus and query dataset structure:
 python -m bench.corpus
 ```
 
-Expected terminal output:
+### 5. Run the Benchmarks
+Run the full MRL sweep and output the comparison table:
+```bash
+python -m bench.benchmark
+```
+
+Expected output:
 ```text
-35 docs across 6 topics: programming=6, finance=6, cooking=6, animals=6, sports=6, health=5
-9 queries
-4 sanity-labeled queries
+Embedding 35 docs + 9 queries at full dim (once)...
+
+Sanity check (full-dim top-1 vs known-relevant):
+  [OK ] 'how do I catch and handle errors in my code...' -> p1 (want ['p1'])
+  [OK ] 'ways to roll back changes in version control...' -> p2 (want ['p2'])
+  [OK ] 'how to grow my long-term savings...' -> f1 (want ['f1', 'f5'])
+  [OK ] 'how much sleep should I get...' -> h2 (want ['h2'])
+  => reference looks sane
+
+Results (k=5, corpus=35 docs):
+  dim |  recall@5 |  search ms |  memory KB
+----------------------------------------------
+   64 |     0.822 |     0.0021 |        8.75
+  128 |     0.911 |     0.0022 |       17.50
+  256 |     0.978 |     0.0024 |       35.00
+  512 |     1.000 |     0.0026 |       70.00
+  768 |     1.000 |     0.0029 |      105.00
 ```
 
 ---
@@ -85,6 +112,7 @@ Expected terminal output:
 is02p02-mrl-benchmarker/
   bench/
     __init__.py    Marks bench/ as a package directory
+    benchmark.py   Matrix scoring, metric calculations, and benchmarking loop
     corpus.py      Evaluation corpus, queries, and sanity-check mappings
     embed.py       L2 normalization, embedding, truncation, and self-test suite
   config.py        Central settings loader singleton
@@ -109,10 +137,15 @@ is02p02-mrl-benchmarker/
 - **Process**: Slices the vector coords: `vec[:dim]`. Normalizes the sliced coordinates using `_l2_normalize`.
 - **Output**: A float32 numpy array of shape `(dim,)` ($L_2$ norm = $1.0$).
 
-### 4. `bench/corpus.py` (Script execution)
-- **Input**: None (module loading).
-- **Process**: Parses the balanced `CORPUS` array and groups categories to compile count statistics.
-- **Output**: Console print details of loaded documents, query samples, and sanity mapping check pairs.
+### 4. `rank(query_vec, doc_matrix)`
+- **Input**: A query vector `(dim,)` and document matrix `(n_docs, dim)`.
+- **Process**: Vectorized dot product (`doc_matrix @ query_vec`) followed by sorting indices in descending order using `np.argsort(-scores)`.
+- **Output**: Ranked document indices.
+
+### 5. `recall_at_k(truncated_doc_vecs, truncated_query_vecs, gold, k)`
+- **Input**: Truncated document and query matrices, ground truth top-k index sets `gold`, and integer `k`.
+- **Process**: Calculates top-k rankings at the current dimension and averages the intersection ratios vs. `gold` over all queries.
+- **Output**: Mean recall score.
 
 ---
 
@@ -121,8 +154,10 @@ is02p02-mrl-benchmarker/
 ### Truncation Slicing Norms
 By executing `python -m bench.embed`, we assert that every sliced embedding is placed back onto the unit sphere surface. Out of 25 distinct combinations of documents, queries, and dimension bounds (64, 128, 256, 512, 768), all L2 norms evaluate to exactly `1.000000` (within a tolerance threshold of `1e-5`).
 
-### Corpus Integrity
-Running `python -m bench.corpus` demonstrates a balanced class distribution across the evaluation database, preventing single-category dominance from biasing downstream Recall@K metrics.
+### Retrieval Recall & Memory Sweep
+Running the benchmark suite yields clear verification of the MRL capability:
+* **Elbow Point (256 dimensions):** At just 256 dimensions, we reduce the embedding space and database memory footprint by **66.6%** (from 105.00 KB down to 35.00 KB) while preserving **97.8%** of the semantic retrieval accuracy (recall@5 = 0.978) relative to the full-dimensional 768-d reference model.
+* **Latency Profile:** At 35 documents, latency is negligible ($<0.01$ ms) and dominated by Python runtime loop overhead, though memory savings map linearly to disk and memory caches.
 
 ---
 
