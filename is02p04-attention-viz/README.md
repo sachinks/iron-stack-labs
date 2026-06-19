@@ -1,37 +1,42 @@
-# IS02P04 — Attention Visualiser (Step 1)
+# IS02P04 — Attention Visualiser (Step 2)
 
 > *"Each attention head asks: for this token, which other tokens are most relevant to my current purpose? Multiple heads attend to different linguistic relationships in parallel."*
 
-This repository is Step 1 of the **Attention Visualiser** project in the Iron Stack curriculum.
+This repository is Step 2 of the **Attention Visualiser** project in the Iron Stack curriculum.
 
 ---
 
 ## 2. What this step builds
 
 In this step, we implement:
-* **`attention_scratch.py`**: A clean PyTorch implementation of the **Scaled Dot-Product Attention** algorithm. It handles batched multi-head tensors and supports causal masking (for autoregressive decoder models).
+* **`attention_scratch.py`**: A clean PyTorch implementation of the **Scaled Dot-Product Attention** algorithm.
+* **`kv_cache_calc.py`**: A VRAM profiler to calculate and report the exact memory footprint in gigabytes (GB) required by LLM Key-Value caches across different model sizes (Llama 1B to 405B) and context window lengths (1K to 128K tokens).
 
 ---
 
 ## 3. Core Concepts
 
-### Scaled Dot-Product Attention
-Attention allows representations to route information dynamically. The formula is:
-$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V$$
+### The KV Cache: Speed vs. Memory Cost
+During the token-by-token (autoregressive) generation phase of a Decoder-only LLM, Key and Value vector representations for all past tokens do not change. To avoid redundant re-projections (which would scale computational cost quadratically as $O(N^2)$), models store past Key and Value vectors in a running cache. This reduces inference processing complexity to $O(N)$.
 
-* **Query ($Q$):** Represents what a token is looking for.
-* **Key ($K$):** Represents what information a token holds/offers.
-* **Value ($V$):** Contains the actual content representation aggregated into the final outputs.
-* **Scaling Factor ($\sqrt{d_k}$):** Stabilizes gradients during training. Large $d_k$ causes dot products to grow large, pushing softmax into flat saturation zones with near-zero gradients. Dividing by $\sqrt{d_k}$ prevents this.
+However, this speedup comes at a linear memory cost. The VRAM occupied by the cache is calculated as:
+$$\text{Memory (Bytes)} = 2 \times \text{layers} \times \text{KV\_heads} \times \text{head\_dim} \times \text{seq\_len} \times \text{dtype\_bytes}$$
+
+For large models running at long sequence contexts (e.g. 128K context), the KV Cache can consume hundreds of gigabytes of VRAM, often eclipsing the base footprint of the model parameter weights themselves.
 
 ---
 
 ## 4. How to Run
 
-Run the attention tests:
-```bash
-python attention_scratch.py
-```
+1. **Verify Attention Scratch Tests:**
+   ```bash
+   python attention_scratch.py
+   ```
+
+2. **Run the KV Cache Calculator Report:**
+   ```bash
+   python kv_cache_calc.py
+   ```
 
 ---
 
@@ -40,6 +45,7 @@ python attention_scratch.py
 ```
 is02p04-attention-viz/
 ├── attention_scratch.py
+├── kv_cache_calc.py
 └── README.md
 ```
 
