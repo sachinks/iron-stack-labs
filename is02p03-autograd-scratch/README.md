@@ -1,17 +1,18 @@
-# IS02P03 — Autograd Scratch (Step 2: Programmatic Graph Inspector)
+# IS02P03 — Autograd Scratch (Step 3: Graphviz Graph Renderer)
 
 > *"Under the hood of every deep learning framework lies a dynamic computational graph. Every forward operation constructs the graph; every backward call traverses it in reverse topological order. To truly master neural networks, we must peel back the layers of abstraction: no torch.nn, no torch.optim. Just raw tensors, manual parameter updates, and explicit gradient resets."*
 
 ---
 
-## What this project builds (Step 2)
+## What this project builds (Step 3)
 
-In this second step, we explore the internal representation of the dynamically generated computational graph:
+In this third step, we implement automated computation graph visualization:
 1. **Raw Parameter Initialization** — Explicitly defines weight matrices ($W_1$, $W_2$) and bias vectors ($b_1$, $b_2$) with `requires_grad=True` to register them as leaves of the computational graph.
 2. **Explicit Activation Operations** — Implements custom `relu` and `sigmoid` functions directly.
 3. **Define-by-Run Forward Path** — Projects 2D inputs into an 8D representation space and performs predictions using raw tensor matrix multiplications (`@`) and broadcasting additions.
 4. **Manual SGD Optimization** — Performs weight optimization updates in a `torch.no_grad()` context block and manually resets parameter gradients to zero after each epoch.
 5. **Programmatic Graph Inspector (`graph_inspect.py`)** — Traverses the `.next_functions` pointers recursively in a Depth-First Search (DFS) walk starting from the network's final output tensor back to the parameters' leaf nodes (`AccumulateGrad`).
+6. **Graphviz Graph Renderer (`visualise_graph.py`)** — Traverses the computational graph starting from the loss node, maps dynamic pointer hex addresses to named parameters (e.g. `W1 (2, 8)`), and compiles them into a Top-to-Bottom structured hierarchical diagram `xor_graph.png` via Graphviz.
 
 ---
 
@@ -37,6 +38,12 @@ When a hidden unit's input $z$ is negative for all dataset samples, the ReLU act
 * **`.next_functions` Pointer:** Each `grad_fn` object contains a list of parent operational references. Following this tree structure allows recursive DFS traversal back to leaf parameters.
 * **`AccumulateGrad` Terminals:** At the base of the pointer chain lie the parameters' `AccumulateGrad` nodes. This is where backpropagation deposits the final computed derivatives into the tensor's `.grad` field.
 
+### 6. Visual Computational Graph Compilations
+* **Visual Graph Walking (`torchviz`):** `torchviz.make_dot` executes a recursive traversal walker over `grad_fn → next_functions` pointers, compiling the relationships into Graphviz DOT layout code.
+* **Display Address Mapping:** Resolves raw hexadecimal memory pointer addresses by accepting a dictionary mapping tensors to human-readable labels (e.g. `W1 (2, 8)`).
+* **Graphviz Compilation Engine:** System-level layouts are compiled via Graphviz's command-line utility `dot` to save output raster diagrams (`xor_graph.png`).
+* **Vertical Structure Hierarchy:** Using `rankdir="TB"` forces a top-to-bottom layout mapping the loss scalar down through operational nodes back to parameter leaves.
+
 ---
 
 ## How to install & run
@@ -48,51 +55,40 @@ python3 -m venv ~/venvs/is02p03-autograd-scratch
 source ~/venvs/is02p03-autograd-scratch/bin/activate
 ```
 
-### 2. Install PyTorch (CPU-only)
-Install the CPU-only wheels:
+### 2. Install PyTorch and Dependencies
+Install the CPU-only wheels along with `torchviz` and `matplotlib`:
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install torchviz matplotlib
 ```
 
-### 3. Run the XOR Solver
+### 3. Install System Graphviz
+Graphviz's `dot` layout compilation requires the system-level binary package:
+```bash
+sudo apt install graphviz
+```
+
+### 4. Run the XOR Solver
 Verify convergence by running:
 ```bash
 python xor_solver.py
 ```
 
-### 4. Walk the Computation Graph
+### 5. Walk the Computation Graph
 Trace the internal C++ operational pointer graph back to parameter leaves:
 ```bash
 python graph_inspect.py
 ```
 
-Expected terminal output:
+### 6. Render the Computational Graph
+Generate the visual node-link diagram representation `xor_graph.png`:
+```bash
+python visualise_graph.py
+```
+
+Expected output:
 ```text
-=== grad_fn of each tensor ===
-x.grad_fn      : None   <- leaf, no op created it
-W1.grad_fn     : None  <- leaf parameter (2x8)
-z1.grad_fn     : <AddBackward0 object at 0x...>
-a1.grad_fn     : <ReluBackward0 object at 0x...>
-z2.grad_fn     : <AddBackward0 object at 0x...>
-output.grad_fn : <SigmoidBackward0 object at 0x...>
-
-=== computation graph (output -> leaves) ===
--> SigmoidBackward0
-    -> AddBackward0
-        -> MmBackward0
-            -> ReluBackward0
-                -> AddBackward0
-                    -> MmBackward0
-                        -> AccumulateGrad
-                        -> None
-                    -> AccumulateGrad
-            -> AccumulateGrad
-        -> AccumulateGrad
-
-AccumulateGrad nodes are the leaf parameters (W1, b1, W2, b2):
-that is where .backward() deposits the final gradients into .grad.
-
-Weight shapes: W1=[2, 8], b1=[8], W2=[8, 1], b2=[1]
+Saved: xor_graph.png
 ```
 
 ---
@@ -101,7 +97,9 @@ Weight shapes: W1=[2, 8], b1=[8], W2=[8, 1], b2=[1]
 
 ```
 is02p03-autograd-scratch/
+  .gitignore        Ignore compiled binary files, caches, and generated *.png diagrams
   graph_inspect.py  DFS pointer walker to trace internal PyTorch grad_fn DAG
+  visualise_graph.py Graphviz DAG renderer utilizing torchviz.make_dot
   xor_solver.py     2-layer Perceptron manual XOR solver using raw PyTorch tensors
   README.md         Step-specific implementation notes and theory
 ```
@@ -126,11 +124,17 @@ is02p03-autograd-scratch/
 
 ### 4. `walk(fn, depth=0)`
 - **Input**: A `grad_fn` object (or `None`), and integer `depth`.
+- **Process**: Indents class type names and recurses parents in `fn.next_functions`.
+- **Output**: Console outline of the pointer tree.
+
+### 5. `visualise_graph.py` (Script execution)
+- **Input**: None (module execution).
 - **Process**:
-  1. Base case: If `fn is None`, return.
-  2. Print the type name of the class indented by `4 * depth` spaces.
-  3. Recursively call `walk(parent_fn, depth + 1)` for each parent tuple in `fn.next_functions`.
-- **Output**: Prints the graph to standard output.
+  1. Executes a single forward pass.
+  2. Defines a display dictionary mapping weights and biases.
+  3. Executes `make_dot` using the loss scalar node.
+  4. Formats layout direction and renders to PNG.
+- **Output**: Saves `xor_graph.png` to disk.
 
 ---
 
